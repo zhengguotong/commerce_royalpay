@@ -1,0 +1,8 @@
+<?php
+/**
+ * @file
+ * @author Guotong Zheng (Tony)
+ * @website http://zhengguotong.me
+ * Implements Royal Pay payment services for use with Drupal Commerce
+ */
+ 
