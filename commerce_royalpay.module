@@ -2,7 +2,137 @@
 /**
  * @file
  * @author Guotong Zheng (Tony)
- * @website http://zhengguotong.me
+ * @website http://visionsoft.com.au
  * Implements Royal Pay payment services for use with Drupal Commerce
  */
+
+ /**
+ * Implements hook_commerce_payment_method_info().
+ */
+function commerce_royalpay_commerce_payment_method_info() {
+    $payment_methods = array();
+
+    // Declare Alipay payment method to redirect to external site.
+    $payment_methods['royal_pay'] = array(
+        'base' => 'commerce_royalpay',
+        'title' => t('Royal Pay'),
+        'terminal' => FALSE,
+        'offsite' => TRUE,
+        'offsite_autoredirect' => TRUE,
+    );
+
+    return $payment_methods;
+}
+
+/**
+ * Payment method callback: settings form.
+ */
+function commerce_royalpay_settings_form($settings = NULL) {
+    $form = array();
+
+    $settings = (array) $settings + array(
+            'service' => 'QRCode',
+            'partner' => '',
+            'key' => '',
+            'debug' => '',
+        );
+    // Declare form settings to configure the Royal pay payment method.
+    $form['service'] = array(
+        '#type' => 'select',
+        '#title' => t('Payment service type'),
+        '#prefix' => t('Configure Royalpay payment settings below with the corresponding account information.'),
+        '#description' => t('Select the type of service provided by Royalpay to process payments.<br/><strong>Currently only Instant Payment is fully supported.</strong>'),
+        '#default_value' => $settings['service'],
+        '#options' => array(
+            'qrcode_payment' => t('QR Code Payment Page in RoyalPay'),
+        ),
+        '#required' => TRUE,
+    );
+
+    
+    $form['partner_code'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Partner code'),
+        '#description' => t("Code for partner, including four uppercase letters or numbers"),
+        '#default_value' => $settings['partner_code'],
+        '#required' => TRUE,
+    );
+    
+    $form['credential_code'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Credential Code'),
+        '#description' => t("Partner credential code for development provided by RoyalPay system"),
+        '#default_value' => $settings['credential_code'],
+        '#required' => TRUE,
+    );
+
+    $form['api_version'] = array(
+        '#type' => 'select',
+        '#title' => t('Royal Pay API Version'),
+        '#description' => t("Partner credential code for development provided by RoyalPay system"),
+        '#default_value' => $settings['api_version'],
+        '#options' => array(
+            'v1.0' => 'v1.0',
+        ),
+    );
+
+    $form['currency'] = array(
+        '#type' => 'select',
+        '#title' => t('Select a target  foreign currency'),
+        '#description' => t("RoyalPay can only accept the following currencies at the moment. Please note that the settlement currency will always be Australian Dollar"),
+        '#default_value' => $settings['currency'],
+        '#options' => array(
+            'AUD' => t('Australian Dollar'),
+            'CHY' => t('Chinese yuan'),
+        ),
+        '#required' => TRUE,
+    );
+    // Enable debug mode.
+    $form['debug'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Enable debug mode <strong>(for development use only)</strong>'),
+        '#description' => t('<strong>Override all transactions to a total of 0.01 CNY</strong> for testing the configuration and making sure that payments can be received on the correct account.<br/>This setting should only be used for development purposes.'),
+        '#default_value' => $settings['debug'],
+    );
+
+    return $form;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Modify the payment method selection pane on Checkout to add Alipay icons.
+ */
+ function commerce_royalpay_form_commerce_checkout_form_alter(&$form, &$form_state)
+ {
+     // If this checkout form contains the payment method radios...
+     if (!empty($form['commerce_payment']['payment_method']['#options'])) {
+         // Loop over its options array looking for a Alipay option.
+         foreach ($form['commerce_payment']['payment_method']['#options'] as $key => &$value) {
+             list($method_id, $rule_name) = explode('|', $key);
  
+             // If we find Alipay...
+             if ($method_id == 'royal_pay') {
+                 // Prepare the replacement radio button text with icons.
+                 $icons_path = drupal_get_path('module', 'commerce_royalpay') . '/images/';
+ 
+                 // Generate Alipay logo image markup.
+                 $royalpay_label = t('Alipay');
+                 $royalpay_icon = theme('image', array(
+                     'path' => $icons_path . 'wechat-pay.png',
+                     'title' => $royalpay_label,
+                     'alt' => $royalpay_label,
+                     'attributes' => array('class' => 'commerce-royalpay-icon'),
+                 ));
+ 
+                 // Generate the aggregated markup.
+                 $value = $royalpay_icon . '<span class="commerce-royalpay-label">' . $royalpay__label . '</span>';
+ 
+                 // Add module's CSS for the custom labels styles.
+                 $form['commerce_payment']['payment_method']['#attached']['css'][] = drupal_get_path('module', 'commerce_royalpay') . '/theme/commerce_royalpay.theme.css';
+ 
+                 break;
+             }
+         }
+     }
+ }
