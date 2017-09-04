@@ -49,7 +49,7 @@ function commerce_royalpay_settings_form($settings = NULL) {
         '#required' => TRUE,
     );
 
-    
+
     $form['partner_code'] = array(
         '#type' => 'textfield',
         '#title' => t('Partner code'),
@@ -57,7 +57,7 @@ function commerce_royalpay_settings_form($settings = NULL) {
         '#default_value' => $settings['partner_code'],
         '#required' => TRUE,
     );
-    
+
     $form['credential_code'] = array(
         '#type' => 'textfield',
         '#title' => t('Credential Code'),
@@ -110,29 +110,125 @@ function commerce_royalpay_settings_form($settings = NULL) {
          // Loop over its options array looking for a Alipay option.
          foreach ($form['commerce_payment']['payment_method']['#options'] as $key => &$value) {
              list($method_id, $rule_name) = explode('|', $key);
- 
+
              // If we find Alipay...
              if ($method_id == 'royal_pay') {
                  // Prepare the replacement radio button text with icons.
                  $icons_path = drupal_get_path('module', 'commerce_royalpay') . '/images/';
- 
+
                  // Generate Alipay logo image markup.
-                 $royalpay_label = t('Alipay');
+                 $royalpay_label = t('Royalpay');
                  $royalpay_icon = theme('image', array(
                      'path' => $icons_path . 'wechat-pay.png',
                      'title' => $royalpay_label,
                      'alt' => $royalpay_label,
                      'attributes' => array('class' => 'commerce-royalpay-icon'),
                  ));
- 
+
                  // Generate the aggregated markup.
-                 $value = $royalpay_icon . '<span class="commerce-royalpay-label">' . $royalpay__label . '</span>';
- 
+                 $value = $royalpay_icon ;
+
                  // Add module's CSS for the custom labels styles.
                  $form['commerce_payment']['payment_method']['#attached']['css'][] = drupal_get_path('module', 'commerce_royalpay') . '/theme/commerce_royalpay.theme.css';
- 
+
                  break;
              }
          }
      }
  }
+
+
+ /**
+ * Payment method callback: adds a message to the submission form.
+ */
+function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_pane, $order) {
+    $form['royalpay_information'] = array(
+        '#markup' => '<span class="commerce-royalpay-info">' . t( commerce_royalpay_sign('test'). '(Continue with checkout to complete payment via wechatpay.)') . '</span>',
+    );
+
+    return $form;
+}
+
+
+/**
+ * Payment method callback: redirect form.
+ *
+ * Prepares the necessary data to be passed to Alipay with the redirection.
+ */
+ function ommerce_royalpay_redirect_form($form, &$form_state, $order, $payment_method) {
+    // Return an error if the enabled action's settings haven't been configured.
+    if (empty($payment_method['settings']['partner_code'])) {
+        drupal_set_message(t('Royalpay is not configured for use. No Partner code has been specified.'), 'error');
+        return array();
+    }
+    $form = array();
+    $wrapper = entity_metadata_wrapper('commerce_order', $order);
+    $currency_code = $wrapper->commerce_order_total->currency_code->value();
+
+    // Override transaction amount if debug mode is enabled.
+    $amount = $payment_method['settings']['debug'] ? 1 : $wrapper->commerce_order_total->amount->value();
+    $amount = commerce_currency_amount_to_decimal($amount, $currency_code);
+
+    // Set feedback URLs.
+    $settings = array(
+        // Return to the payment redirect page for processing successful payments.
+        'return' => url('checkout/' . $order->order_id . '/payment/return/' . $order->data['payment_redirect_key'], array('absolute' => TRUE)),
+        //'notify_url' => url('commerce_alipay_global/notify', array('absolute' => TRUE)),
+    );
+    $settings = $payment_method['settings'] + $settings;
+
+    $target_currency_code =  $settings['currency'];
+
+    // Declare the data to be provided through Alipay's API to process payment.
+    $data = array(
+        'service' => $settings['service'],
+        'payment_type' => '1',
+        'partner' => $settings['partner'],
+        'seller_email' => $settings['seller_email'],
+        'return_url' => $settings['return'],
+        'notify_url' => $settings['notify'],
+        '_input_charset' => 'UTF-8',
+        'show_url' => $settings['return'],
+        'out_trade_no' => $order->order_number,
+        'subject' => t('order !order_id', array('!order_id' => $order->order_number)),
+        //'body' => commerce_alipay_global_data_body($order),
+        'body' => t('order !order_id', array('!order_id' => $order->order_number)),
+        'total_fee' =>round(commerce_multicurrency_conversion($amount,$currency_code, $target_currency_code),2),
+        'currency' => $target_currency_code,
+        'sign_type' => 'MD5',
+    );
+    // Encrypted transaction signature.
+    $data['sign'] = commerce_royalpay_sign($payment_method['settings']);
+    foreach ($data as $name => $value) {
+        if (!empty($value)) {
+            $value = trim($value);
+            // Add the value as a hidden form element.
+            $form[$name] = array('#type' => 'hidden', '#value' => $value);
+        }
+    }
+    // Override submit callback to redirect to Alipay's payment page.
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Proceed with payment'),
+        '#submit' => array('commerce_alipay_global_redirect'),
+    );
+    return $form;
+}
+
+/**
+ * Helper function to provide an encrypted signature to be passed to Alipay.
+ */
+ function commerce_royalpay_sign($settings, $sign_type = 'sha256') {
+
+    $arg = '1ENF&1504530445&0000000001201504530445&aJha6tRp3KrhUwA8QxAB9rRKj5iSS87g';
+    //Sign the valid string with SHA256 and turn to lowercase Hex string
+    return strtolower( hash($sign_type,utf8_encode($arg)));
+    // return strtolower(hex2bin(hash($sign_type,$arg)));
+}
+
+/**
+ * Helper function to get royalpay sign random nonce string.
+ */
+function commerce_royalpay_get_nonce_str($orderid){
+    return  str_pad($orderid,12,'0',STR_PAD_LEFT) . time ();
+}
