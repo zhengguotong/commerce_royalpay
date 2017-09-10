@@ -10,6 +10,21 @@
  require_once(drupal_get_path('module', 'commerce_royalpay') .'/includes/RoyalPay.Exception.php');
  require_once(drupal_get_path('module', 'commerce_royalpay') . '/includes/RoyalPay.Data.php');
 
+
+ /**
+ * Implements hook_menu().
+ */
+function commerce_royalpay_menu() {
+    // Add a menu callback for Alipay's notification on operation processing.
+    $items['commerce_alipay_global/notify'] = array(
+        'page callback' => 'commerce_royalpay_process_notify',
+        'access callback' => TRUE,
+        'type' => MENU_CALLBACK,
+    );
+
+    return $items;
+}
+
  /**
  * Implements hook_commerce_payment_method_info().
  */
@@ -40,20 +55,7 @@ function commerce_royalpay_settings_form($settings = NULL) {
             'key' => '',
             'debug' => '',
         );
-    // Declare form settings to configure the Royal pay payment method.
-    $form['service'] = array(
-        '#type' => 'select',
-        '#title' => t('Payment service type'),
-        '#prefix' => t('Configure Royalpay payment settings below with the corresponding account information.'),
-        '#description' => t('Select the type of service provided by Royalpay to process payments.<br/><strong>Currently only Instant Payment is fully supported.</strong>'),
-        '#default_value' => $settings['service'],
-        '#options' => array(
-            'qrcode_payment' => t('QR Code Payment Page in RoyalPay'),
-        ),
-        '#required' => TRUE,
-    );
-
-    
+ 
     $form['partner_code'] = array(
         '#type' => 'textfield',
         '#title' => t('Partner code'),
@@ -70,32 +72,11 @@ function commerce_royalpay_settings_form($settings = NULL) {
         '#required' => TRUE,
     );
 
-    $form['api_version'] = array(
-        '#type' => 'select',
-        '#title' => t('Royal Pay API Version'),
-        '#description' => t("Partner credential code for development provided by RoyalPay system"),
-        '#default_value' => $settings['api_version'],
-        '#options' => array(
-            'v1.0' => 'v1.0',
-        ),
-    );
-
-    $form['currency'] = array(
-        '#type' => 'select',
-        '#title' => t('Select a target  foreign currency'),
-        '#description' => t("RoyalPay can only accept the following currencies at the moment. Please note that the settlement currency will always be Australian Dollar"),
-        '#default_value' => $settings['currency'],
-        '#options' => array(
-            'AUD' => t('Australian Dollar'),
-            'CHY' => t('Chinese yuan'),
-        ),
-        '#required' => TRUE,
-    );
     // Enable debug mode.
     $form['debug'] = array(
         '#type' => 'checkbox',
         '#title' => t('Enable debug mode <strong>(for development use only)</strong>'),
-        '#description' => t('<strong>Override all transactions to a total of 0.01 CNY</strong> for testing the configuration and making sure that payments can be received on the correct account.<br/>This setting should only be used for development purposes.'),
+        '#description' => t('<strong>Override all transactions to a total of 0.01 </strong> for testing the configuration and making sure that payments can be received on the correct account.<br/>This setting should only be used for development purposes.'),
         '#default_value' => $settings['debug'],
     );
 
@@ -123,7 +104,7 @@ function commerce_royalpay_settings_form($settings = NULL) {
                  // Generate Alipay logo image markup.
                  $royalpay_label = t('Royalpay');
                  $royalpay_icon = theme('image', array(
-                     'path' => $icons_path . 'wechat-pay.png',
+                     'path' => $icons_path . 'royalpay-logo.jpeg',
                      'title' => $royalpay_label,
                      'alt' => $royalpay_label,
                      'attributes' => array('class' => 'commerce-royalpay-icon'),
@@ -131,9 +112,6 @@ function commerce_royalpay_settings_form($settings = NULL) {
  
                  // Generate the aggregated markup.
                  $value = $royalpay_icon ;
- 
-                 // Add module's CSS for the custom labels styles.
-                 $form['commerce_payment']['payment_method']['#attached']['css'][] = drupal_get_path('module', 'commerce_royalpay') . '/theme/commerce_royalpay.theme.css';
  
                  break;
              }
@@ -179,9 +157,6 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
         'return' => url('checkout/' . $order->order_id . '/payment/return/' . $order->data['payment_redirect_key'], array('absolute' => TRUE)),
         //'notify_url' => url('commerce_alipay_global/notify', array('absolute' => TRUE)),
     );
-    // $settings = $payment_method['settings'] + $settings;
-
-    // $target_currency_code =  $settings['currency'];
 
     $input = new RoyalPayUnifiedOrder();
     $input->setPartnerInfo($payment_method['settings']['partner_code'],$payment_method['settings']['credential_code']);
@@ -199,44 +174,90 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
     $inputObj->setPartnerInfo($payment_method['settings']['partner_code'],$payment_method['settings']['credential_code']);
     $inputObj->setRedirect($settings['return']);
 
-    // Declare the data to be provided through Alipay's API to process payment.
-    // $data = array(
-    //     'service' => $settings['service'],
-    //     'payment_type' => '1',
-    //     'partner' => $settings['partner'],
-    //     'seller_email' => $settings['seller_email'],
-    //     'return_url' => $settings['return'],
-    //     'notify_url' => $settings['notify'],
-    //     '_input_charset' => 'UTF-8',
-    //     'show_url' => $settings['return'],
-    //     'out_trade_no' => $order->order_number,
-    //     'subject' => t('order !order_id', array('!order_id' => $order->order_number)),
-    //     //'body' => commerce_alipay_global_data_body($order),
-    //     'body' => t('order !order_id', array('!order_id' => $order->order_number)),
-    //     'total_fee' =>round(commerce_multicurrency_conversion($amount,$currency_code, $target_currency_code),2),
-    //     'currency' => $target_currency_code,
-    //     'sign_type' => 'MD5',
-    // );
-    // // Encrypted transaction signature.
-    // $data['sign'] = commerce_royalpay_sign($payment_method['settings']);
-    // foreach ($data as $name => $value) {
-    //     if (!empty($value)) {
-    //         $value = trim($value);
-    //         // Add the value as a hidden form element.
-    //         $form[$name] = array('#type' => 'hidden', '#value' => $value);
-    //     }
-    // }
-    // Override submit callback to redirect to Alipay's payment page.
     $form['pay_url'] = array('#type' => 'hidden',
                                  '#value' => RoyalPayApi::getQRRedirectUrl($result['pay_url'], $inputObj));
     $form['submit'] = array(
         '#type' => 'submit',
-        '#value' => t('Proceed with payment'),
+        '#value' => t('Proceed with royalpay'),
         '#submit' => array('commerce_royalpay_redirect'),
     );
     
     return $form;
 }
+
+/**
+ * Menu callback function to process Royalpay's feedback notifications.
+ */
+ function commerce_royalpay_commerce_process_notify() {
+    $response = json_decode($GLOBALS['HTTP_RAW_POST_DATA'], true);
+    // Log an entry of the notification received for a transaction.
+    watchdog('commerce_royalpay', 'Customer returned from Royalpay with the following data:<pre>@notify</pre>', array('@notify' => print_r($response, TRUE)));
+    if(!empty($response) && !empty( $response['sign'])){
+
+        $order_id = commerce_royalpay_get_dc_order_id($order_id);
+        $order = commerce_order_load($order_id);
+        $payment_method = commerce_payment_method_instance_load($order->data['payment_method']);
+
+        $input = new RoyalPayDataBase();
+        $input->setPartnerInfo($payment_method['settings']['partner_code'],$payment_method['settings']['credential_code']);
+        $input->setNonceStr($response['nonce_str']);
+        $input->setTime($response['time']);
+        $input->setSign();
+        
+        //validate royal pay sign
+        if ($input->getSign() == $response['sign']) {
+            commerce_royapal_notify_submit($order, $payment_method, $response);
+        } 
+    }
+    return FALSE;
+}
+
+/**
+ * Submit and process a notification feedback from Royalpay for a transaction.
+ *
+ * This function creates or updates payment transaction records for
+ * corresponding orders depending on the status of the notifications received.
+ */
+ function commerce_royapal_notify_submit($order, $payment_method, $notify) {
+    // Attempt to load prior authorization capture IPN created previously.
+    $transactions = commerce_payment_transaction_load_multiple(array(), array('remote_id' => $notify["partner_order_id"]));
+    if (!empty($transactions)) {
+        // @TODO: Load the prior transaction ID and update with the capture values.
+        // There is probably some special handling necessary in this case.
+        $transaction = reset($transactions);
+    }
+    else {
+        // Create a new payment transaction for the order.
+        $transaction = commerce_payment_transaction_new($payment_method['method_id'], $order->order_id);
+        $transaction->instance_id = $payment_method['instance_id'];
+    }
+    $currency_code =  $notify["currency"];
+
+    $transaction->amount =$notify['total_fee'];
+    $transaction->currency_code = $currency_code;
+
+    $transactions = commerce_payment_transaction_load_multiple(array(), array('remote_id' => $notify["partner_order_id"]));
+    $transaction->remote_id = $notify["trade_no"];
+    // Set the transaction's statuses based on notify's trade_status.
+    $transaction->remote_status = COMMERCE_PAYMENT_STATUS_SUCCESS;
+    $transaction->data['notify'] = $response;
+    $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
+    $transaction->message = t('The payment has completed.');
+   
+    // Save the payment transaction and redirect to next page.
+    commerce_payment_redirect_pane_next_page($order);
+    commerce_payment_transaction_save($transaction);
+
+    //if is first  paid in full trigger is not trigger uncomment this
+   // rules_invoke_all('commerce_payment_order_paid_in_full', $order, $transaction);
+
+    // Record an entry of the transaction with the order and trade numbers.
+    watchdog('commerce_alipay_global', 'Notify processed for Order @order_number with ID @trade_no.', array('@trade_no' => $notify["trade_no"], '@order_number' => $order->order_number), WATCHDOG_INFO);
+
+    $result = array('return_code' => 'SUCCESS');
+    return json_encode($result);
+}
+
 
 /**
  * Redirects the transaction to Alipay's payment gateway.
@@ -250,4 +271,8 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
 
 function commerce_royalpay_get_order_id($order_id){
     return str_pad($order_id,10,'0',STR_PAD_LEFT) . date('dmYhis');
+}
+
+function commerce_royalpay_get_dc_order_id($order_id){
+    return (int) substr($order_id, 0, 10);
 }

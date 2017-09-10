@@ -1,4 +1,4 @@
-Commerce Alipay Global
+Commerce Royalpay
 
 Developer: Guotong Zheng (Tony)
 Developer Website:http://visionsoft.com.au
