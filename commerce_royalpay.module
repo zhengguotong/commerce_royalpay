@@ -151,6 +151,7 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
     $amount = $payment_method['settings']['debug'] ? 1 : $wrapper->commerce_order_total->amount->value();
    // $amount = commerce_currency_amount_to_decimal($amount, $currency_code);
 
+
     $input = new RoyalPayUnifiedOrder();
     $input->setPartnerInfo($payment_method['settings']['partner_code'],$payment_method['settings']['credential_code']);
 
@@ -165,7 +166,7 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
 
     $inputObj = new RoyalPayRedirect();
     $inputObj->setPartnerInfo($payment_method['settings']['partner_code'],$payment_method['settings']['credential_code']);
-    $inputObj->setRedirect($settings['return']);
+    $inputObj->setRedirect(url('checkout/' . $order->order_id . '/payment/return/' . $order->data['payment_redirect_key'], array('absolute' => TRUE)));
 
     $form['pay_url'] = array('#type' => 'hidden',
                              '#value' => RoyalPayApi::getQRRedirectUrl($result['pay_url'], $inputObj));
@@ -185,11 +186,13 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
  */
  function commerce_royalpay_process_notify() {
     $response = json_decode($GLOBALS['HTTP_RAW_POST_DATA'], true);
+   
     // Log an entry of the notification received for a transaction.
-    watchdog('commerce_royalpay', 'Customer returned from Royalpay with the following data:<pre>@notify</pre>', array('@notify' => print_r($response, TRUE)));
+    watchdog('commerce_royalpay', 'Customer returned from Royalpay with the following data:<pre>@response</pre>', array('@response' => print_r($response, TRUE)));
     if(!empty($response) && !empty( $response['sign'])){
 
-        $order_id = commerce_royalpay_get_dc_order_id($order_id);
+        $order_id = commerce_royalpay_get_dc_order_id($response["partner_order_id"]);
+
         $order = commerce_order_load($order_id);
         $payment_method = commerce_payment_method_instance_load($order->data['payment_method']);
 
@@ -247,7 +250,7 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
    // rules_invoke_all('commerce_payment_order_paid_in_full', $order, $transaction);
 
     // Record an entry of the transaction with the order and trade numbers.
-    watchdog('commerce_alipay_global', 'Notify processed for Order @order_number with ID @trade_no.', array('@trade_no' => $notify["trade_no"], '@order_number' => $order->order_number), WATCHDOG_INFO);
+    watchdog('commerce_royalpay', 'Notify processed for Order @order_number with ID @trade_no.', array('@trade_no' => $notify["trade_no"], '@order_number' => $order->order_number), WATCHDOG_INFO);
 
     $result = array('return_code' => 'SUCCESS');
     return json_encode($result);
