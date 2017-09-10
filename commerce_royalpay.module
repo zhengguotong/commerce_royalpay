@@ -16,7 +16,7 @@
  */
 function commerce_royalpay_menu() {
     // Add a menu callback for Alipay's notification on operation processing.
-    $items['commerce_alipay_global/notify'] = array(
+    $items['commerce_royalpay/notify'] = array(
         'page callback' => 'commerce_royalpay_process_notify',
         'access callback' => TRUE,
         'type' => MENU_CALLBACK,
@@ -151,13 +151,6 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
     $amount = $payment_method['settings']['debug'] ? 1 : $wrapper->commerce_order_total->amount->value();
    // $amount = commerce_currency_amount_to_decimal($amount, $currency_code);
 
-    // Set feedback URLs.
-    $settings = array(
-        // Return to the payment redirect page for processing successful payments.
-        'return' => url('checkout/' . $order->order_id . '/payment/return/' . $order->data['payment_redirect_key'], array('absolute' => TRUE)),
-        //'notify_url' => url('commerce_alipay_global/notify', array('absolute' => TRUE)),
-    );
-
     $input = new RoyalPayUnifiedOrder();
     $input->setPartnerInfo($payment_method['settings']['partner_code'],$payment_method['settings']['credential_code']);
 
@@ -165,7 +158,7 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
     $input->setDescription( ' order:' . $order->order_number);
     $input->setPrice($amount);
     $input->setCurrency($currency_code);
-    // $input->setNotifyUrl('');
+    $input->setNotifyUrl( url('commerce_royalpay/notify', array('absolute' => TRUE)));
     $input->setOperator("123456");
 
     $result = RoyalPayApi::qrOrder($input);
@@ -175,7 +168,9 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
     $inputObj->setRedirect($settings['return']);
 
     $form['pay_url'] = array('#type' => 'hidden',
-                                 '#value' => RoyalPayApi::getQRRedirectUrl($result['pay_url'], $inputObj));
+                             '#value' => RoyalPayApi::getQRRedirectUrl($result['pay_url'], $inputObj));
+
+    
     $form['submit'] = array(
         '#type' => 'submit',
         '#value' => t('Proceed with royalpay'),
@@ -188,7 +183,7 @@ function commerce_royalpay_submit_form($payment_method, $pane_values, $checkout_
 /**
  * Menu callback function to process Royalpay's feedback notifications.
  */
- function commerce_royalpay_commerce_process_notify() {
+ function commerce_royalpay_process_notify() {
     $response = json_decode($GLOBALS['HTTP_RAW_POST_DATA'], true);
     // Log an entry of the notification received for a transaction.
     watchdog('commerce_royalpay', 'Customer returned from Royalpay with the following data:<pre>@notify</pre>', array('@notify' => print_r($response, TRUE)));
